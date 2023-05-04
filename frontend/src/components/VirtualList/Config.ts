@@ -12,7 +12,7 @@ import NamespaceInfo from '../../pages/Overview/NamespaceInfo';
 import * as React from 'react';
 import { StatefulFilters } from '../Filters/StatefulFilters';
 import { PFBadges, PFBadgeType } from '../../components/Pf/PfBadges';
-import { isGateway } from '../../helpers/LabelFilterHelper';
+import { isGateway, isWaypoint } from '../../helpers/LabelFilterHelper';
 
 export type SortResource = AppListItem | WorkloadListItem | ServiceListItem;
 export type TResource = SortResource | IstioConfigItem;
@@ -31,7 +31,11 @@ export function hasHealth(r: RenderResource): r is SortResource {
 }
 
 export const hasMissingSidecar = (r: SortResource): boolean => {
-  return !isIstioNamespace(r.namespace) && !r.istioSidecar && !isGateway(r.labels);
+  return !isIstioNamespace(r.namespace) && !r.istioSidecar && !isGateway(r.labels) && !isWaypoint(r.labels);
+};
+
+export const noAmbientLabels = (r: SortResource): boolean => {
+  return !isIstioNamespace(r.namespace) && !r.istioAmbient;
 };
 
 type ResourceType<R extends RenderResource> = {
@@ -64,7 +68,7 @@ const status: ResourceType<NamespaceInfo> = {
   name: 'Status',
   param: 'h',
   column: 'Status',
-  transforms: [sortable, cellWidth(40)],
+  transforms: [sortable, cellWidth(50)],
   cellTransforms: [textCenter],
   renderer: Renderers.status
 };
@@ -248,7 +252,7 @@ export type Resource = {
 
 const namespaces: Resource = {
   name: 'namespaces',
-  columns: [tlsStatus, nsItem, istioConfiguration, labels, status],
+  columns: [tlsStatus, nsItem, cluster, istioConfiguration, labels, status],
   badge: PFBadges.Namespace
 };
 
@@ -260,19 +264,19 @@ const workloads: Resource = {
 
 const applications: Resource = {
   name: 'applications',
-  columns: [health, item, namespace, labels, details],
+  columns: [health, item, namespace, cluster, labels, details],
   badge: PFBadges.App
 };
 
 const services: Resource = {
   name: 'services',
-  columns: [health, serviceItem, namespace, labels, serviceConfiguration, details],
+  columns: [health, serviceItem, namespace, cluster, labels, serviceConfiguration, details],
   badge: PFBadges.Service
 };
 
 const istio: Resource = {
   name: 'istio',
-  columns: [istioItem, namespace, istioType, istioObjectConfiguration]
+  columns: [istioItem, namespace, cluster, istioType, istioObjectConfiguration]
 };
 
 const conf = {

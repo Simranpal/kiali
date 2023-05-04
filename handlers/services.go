@@ -103,6 +103,8 @@ func ServiceDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := mux.Vars(r)
+	cluster := clusterNameFromQuery(queryParams)
+
 	namespace := params["namespace"]
 	service := params["service"]
 	queryTime := util.Clock.Now()
@@ -112,7 +114,7 @@ func ServiceDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var istioConfigValidations = models.IstioValidations{}
+	istioConfigValidations := models.IstioValidations{}
 	var errValidations error
 
 	wg := sync.WaitGroup{}
@@ -120,11 +122,11 @@ func ServiceDetails(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), namespace, service, "")
+			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), cluster, namespace, service, "")
 		}()
 	}
 
-	serviceDetails, err := business.Svc.GetServiceDetails(r.Context(), namespace, service, rateInterval, queryTime)
+	serviceDetails, err := business.Svc.GetServiceDetails(r.Context(), cluster, namespace, service, rateInterval, queryTime)
 	if includeValidations && err == nil {
 		wg.Wait()
 		serviceDetails.Validations = istioConfigValidations
@@ -164,6 +166,8 @@ func ServiceUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := mux.Vars(r)
+	cluster := clusterNameFromQuery(queryParams)
+
 	namespace := params["namespace"]
 	service := params["service"]
 	queryTime := util.Clock.Now()
@@ -178,7 +182,7 @@ func ServiceUpdate(w http.ResponseWriter, r *http.Request) {
 		RespondWithError(w, http.StatusBadRequest, "Update request with bad update patch: "+err.Error())
 	}
 	jsonPatch := string(body)
-	var istioConfigValidations = models.IstioValidations{}
+	istioConfigValidations := models.IstioValidations{}
 	var errValidations error
 
 	wg := sync.WaitGroup{}
@@ -186,11 +190,11 @@ func ServiceUpdate(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), namespace, service, "")
+			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), cluster, namespace, service, "")
 		}()
 	}
 
-	serviceDetails, err := business.Svc.UpdateService(r.Context(), namespace, service, rateInterval, queryTime, jsonPatch, patchType)
+	serviceDetails, err := business.Svc.UpdateService(r.Context(), cluster, namespace, service, rateInterval, queryTime, jsonPatch, patchType)
 
 	if includeValidations && err == nil {
 		wg.Wait()

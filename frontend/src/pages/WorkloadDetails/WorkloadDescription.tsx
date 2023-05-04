@@ -16,7 +16,8 @@ import MissingLabel from '../../components/MissingLabel/MissingLabel';
 import MissingAuthPolicy from 'components/MissingAuthPolicy/MissingAuthPolicy';
 import { hasMissingAuthPolicy } from 'utils/IstioConfigUtils';
 import DetailDescriptionContainer from '../../components/Details/DetailDescription';
-import { isGateway } from '../../helpers/LabelFilterHelper';
+import { isGateway, isWaypoint } from '../../helpers/LabelFilterHelper';
+import AmbientLabel from '../../components/Ambient/AmbientLabel';
 
 type WorkloadDescriptionProps = {
   workload?: Workload;
@@ -123,7 +124,7 @@ class WorkloadDescription extends React.Component<WorkloadDescriptionProps> {
 
     return workload ? (
       <Card id={'WorkloadDescriptionCard'} data-test="workload-description-card">
-        <CardHeader>
+        <CardHeader style={{ display: 'table' }}>
           <Title headingLevel="h5" size={TitleSizes.lg}>
             <div key="service-icon" className={iconStyle}>
               <PFBadge badge={PFBadges.Workload} position={TooltipPosition.top} />
@@ -140,14 +141,23 @@ class WorkloadDescription extends React.Component<WorkloadDescriptionProps> {
             <span className={healthIconStyle}>
               <HealthIndicator id={workload.name} health={this.props.health} />
             </span>
-            {this.props.workload && !this.props.workload.istioSidecar && (
-              <MissingSidecar
-                data-test={`missing-sidecar-badge-for-${workload.name}-workload-in-${this.props.namespace}-namespace`}
-                namespace={this.props.namespace}
+            {this.props.workload &&
+              !this.props.workload.istioSidecar &&
+              !this.props.workload.istioAmbient &&
+              !isWaypoint(this.props.workload.labels) && (
+                <MissingSidecar
+                  data-test={`missing-sidecar-badge-for-${workload.name}-workload-in-${this.props.namespace}-namespace`}
+                  namespace={this.props.namespace}
+                  tooltip={true}
+                  style={{ marginLeft: '10px' }}
+                  text={''}
+                  isGateway={isGateway(workload.labels)}
+                />
+              )}
+            {this.props.workload && this.props.workload.istioAmbient && !isWaypoint(this.props.workload.labels) && (
+              <AmbientLabel
                 tooltip={true}
-                style={{ marginLeft: '10px' }}
-                text={''}
-                isGateway={isGateway(workload.labels)}
+                waypoint={this.props.workload.waypointWorkloads?.length > 0 ? true : false}
               />
             )}
             {this.props.workload && hasMissingAuthPolicy(this.props.workload.name, this.props.workload.validations) && (
@@ -158,15 +168,22 @@ class WorkloadDescription extends React.Component<WorkloadDescriptionProps> {
                 text={''}
               />
             )}
-            {this.props.workload && (!this.props.workload.appLabel || !this.props.workload.versionLabel) && (
-              <MissingLabel
-                missingApp={!this.props.workload.appLabel}
-                missingVersion={!this.props.workload.versionLabel}
-                style={{ marginLeft: '10px' }}
-                tooltip={true}
-              />
-            )}
+            {this.props.workload &&
+              (!this.props.workload.appLabel || !this.props.workload.versionLabel) &&
+              !isWaypoint(this.props.workload.labels) && (
+                <MissingLabel
+                  missingApp={!this.props.workload.appLabel}
+                  missingVersion={!this.props.workload.versionLabel}
+                  style={{ marginLeft: '10px' }}
+                  tooltip={true}
+                />
+              )}
           </Title>
+          {this.props.workload?.cluster && (
+            <div key="cluster-icon" className={iconStyle}>
+              <PFBadge badge={PFBadges.Cluster} position={TooltipPosition.right} /> {this.props.workload.cluster}
+            </div>
+          )}
         </CardHeader>
         <CardBody>
           {workload.labels && (
@@ -180,6 +197,14 @@ class WorkloadDescription extends React.Component<WorkloadDescriptionProps> {
             apps={apps}
             services={services}
             health={this.props.health}
+            cluster={this.props.workload?.cluster}
+            waypointWorkloads={
+              this.props.workload
+                ? isWaypoint(this.props.workload.labels)
+                  ? this.props.workload.waypointWorkloads
+                  : undefined
+                : undefined
+            }
           />
         </CardBody>
       </Card>

@@ -51,6 +51,7 @@ const computeValidDurations = (cfg: ComputedServerConfig) => {
 // than may not be providedby/set on the server.
 const defaultServerConfig: ComputedServerConfig = {
   accessibleNamespaces: [],
+  ambientEnabled: false,
   authStrategy: '',
   clusters: {},
   durations: {},
@@ -151,3 +152,7 @@ export const isIstioNamespace = (namespace: string): boolean => {
   }
   return false;
 };
+
+export function isMultiCluster(): boolean {
+  return Object.keys(serverConfig.clusters).length > 1;
+}

@@ -38,7 +38,7 @@ func NamespaceHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	healthCriteria := business.NamespaceHealthCriteria{Namespace: p.Namespace, RateInterval: rateInterval, QueryTime: p.QueryTime, IncludeMetrics: true}
+	healthCriteria := business.NamespaceHealthCriteria{Namespace: p.Namespace, Cluster: p.Cluster, RateInterval: rateInterval, QueryTime: p.QueryTime, IncludeMetrics: true}
 	switch p.Type {
 	case "app":
 		health, err := businessLayer.Health.GetNamespaceAppHealth(r.Context(), healthCriteria)
@@ -65,6 +65,8 @@ func NamespaceHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 type baseHealthParams struct {
+	// Cluster name
+	Cluster string `json:"cluster"`
 	// The namespace scope
 	//
 	// in: path
@@ -74,7 +76,6 @@ type baseHealthParams struct {
 	// in: query
 	// default: 10m
 	RateInterval string `json:"rateInterval"`
-
 	// The time to use for the prometheus query
 	QueryTime time.Time
 }
@@ -86,6 +87,7 @@ func (p *baseHealthParams) baseExtract(r *http.Request, vars map[string]string) 
 	if rateInterval := queryParams.Get("rateInterval"); rateInterval != "" {
 		p.RateInterval = rateInterval
 	}
+	p.Cluster = clusterNameFromQuery(queryParams)
 	if queryTime := queryParams.Get("queryTime"); queryTime != "" {
 		unix, err := strconv.ParseInt(queryTime, 10, 64)
 		if err == nil {

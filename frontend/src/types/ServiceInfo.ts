@@ -42,6 +42,7 @@ export interface WorkloadOverview {
   name: string;
   type: string;
   istioSidecar: boolean;
+  istioAmbient: boolean;
   labels?: { [key: string]: string };
   resourceVersion: string;
   createdAt: string;
@@ -59,12 +60,14 @@ export interface Service {
   externalName: string;
   labels?: { [key: string]: string };
   selectors?: { [key: string]: string };
+  cluster?: string;
 }
 
 export interface ServiceDetailsInfo {
   service: Service;
   endpoints?: Endpoints[];
   istioSidecar: boolean;
+  istioAmbient: boolean;
   virtualServices: VirtualService[];
   k8sHTTPRoutes: K8sHTTPRoute[];
   destinationRules: DestinationRule[];
@@ -76,6 +79,7 @@ export interface ServiceDetailsInfo {
   namespaceMTLS?: TLSStatus;
   validations: Validations;
   additionalDetails: AdditionalItem[];
+  cluster?: string;
 }
 
 export function getServiceDetailsUpdateLabel(serviceDetails: ServiceDetailsInfo | null) {

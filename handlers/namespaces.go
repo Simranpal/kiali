@@ -7,7 +7,6 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/kiali/kiali/kubernetes"
 	"github.com/kiali/kiali/log"
 	"github.com/kiali/kiali/models"
 )
@@ -33,8 +32,11 @@ func NamespaceList(w http.ResponseWriter, r *http.Request) {
 // NamespaceValidationSummary is the API handler to fetch validations summary to be displayed.
 // It is related to all the Istio Objects within the namespace
 func NamespaceValidationSummary(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 	vars := mux.Vars(r)
 	namespace := vars["namespace"]
+
+	cluster := clusterNameFromQuery(query)
 
 	business, err := getBusiness(r)
 	if err != nil {
@@ -44,7 +46,7 @@ func NamespaceValidationSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var validationSummary models.IstioValidationSummary
-	istioConfigValidationResults, errValidations := business.Validations.GetValidations(r.Context(), namespace, "", "")
+	istioConfigValidationResults, errValidations := business.Validations.GetValidations(r.Context(), cluster, namespace, "", "")
 	if errValidations != nil {
 		log.Error(errValidations)
 		RespondWithError(w, http.StatusInternalServerError, errValidations.Error())
@@ -64,6 +66,8 @@ func ConfigValidationSummary(w http.ResponseWriter, r *http.Request) {
 	if len(namespaces) > 0 {
 		nss = strings.Split(namespaces, ",")
 	}
+	cluster := clusterNameFromQuery(params)
+
 	business, err := getBusiness(r)
 	if err != nil {
 		log.Error(err)
@@ -72,7 +76,7 @@ func ConfigValidationSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	validationSummaries := models.ValidationSummaries{}
-	istioConfigValidationResults, errValidations := business.Validations.GetValidations(r.Context(), "", "", "")
+	istioConfigValidationResults, errValidations := business.Validations.GetValidations(r.Context(), cluster, "", "", "")
 	if errValidations != nil {
 		log.Error(errValidations)
 		RespondWithError(w, http.StatusInternalServerError, errValidations.Error())
@@ -100,11 +104,8 @@ func NamespaceUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonPatch := string(body)
 
-	// TODO: Multicluster: Add query parameter
-	cluster := params["cluster"]
-	if cluster == "" {
-		cluster = kubernetes.HomeClusterName
-	}
+	query := r.URL.Query()
+	cluster := clusterNameFromQuery(query)
 
 	ns, err := business.Namespace.UpdateNamespace(r.Context(), namespace, jsonPatch, cluster)
 	if err != nil {

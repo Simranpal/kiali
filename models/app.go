@@ -6,6 +6,11 @@ type AppList struct {
 	// example: bookinfo
 	Namespace Namespace `json:"namespace"`
 
+	// Cluster where the apps live in
+	// required: true
+	// example: east
+	Cluster string `json:"cluster"`
+
 	// Applications for a given namespace
 	// required: true
 	Apps []AppListItem `json:"applications"`
@@ -18,10 +23,20 @@ type AppListItem struct {
 	// example: reviews
 	Name string `json:"name"`
 
+	// Cluster of the application
+	// required: true
+	// example: reviews
+	Cluster string `json:"cluster"`
+
 	// Define if all Pods related to the Workloads of this app has an IstioSidecar deployed
 	// required: true
 	// example: true
 	IstioSidecar bool `json:"istioSidecar"`
+
+	// Define if any pod has the Ambient annotation
+	// required: true
+	// example: true
+	IstioAmbient bool `json:"istioAmbient"`
 
 	// Labels for App
 	Labels map[string]string `json:"labels"`
@@ -44,6 +59,11 @@ type WorkloadItem struct {
 	// example: true
 	IstioSidecar bool `json:"istioSidecar"`
 
+	// Define if belongs to a namespace labeled as ambient
+	// required: true
+	// example: true
+	IstioAmbient bool `json:"istioAmbient"`
+
 	// Labels for Workload
 	Labels map[string]string `json:"labels"`
 
@@ -62,6 +82,11 @@ type App struct {
 	// required: true
 	// example: reviews
 	Name string `json:"name"`
+
+	// Cluster of the application
+	// required: false
+	// example: east
+	Cluster string `json:"cluster"`
 
 	// Workloads for a given application
 	// required: true

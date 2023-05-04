@@ -24,12 +24,12 @@ import * as API from '../../services/Api';
 import {
   DEGRADED,
   FAILURE,
-  Health,
   HEALTHY,
   NOT_READY,
-  NamespaceAppHealth,
   NamespaceServiceHealth,
-  NamespaceWorkloadHealth
+  NamespaceWorkloadHealth,
+  Health,
+  NamespaceAppHealth
 } from '../../types/Health';
 import { SortField } from '../../types/SortFilters';
 import { PromisesRegistry } from '../../utils/CancelablePromises';
@@ -43,7 +43,7 @@ import NamespaceInfo, { NamespaceStatus } from './NamespaceInfo';
 import NamespaceMTLSStatusContainer from '../../components/MTls/NamespaceMTLSStatus';
 import { RenderComponentScroll } from '../../components/Nav/Page';
 import NamespaceStatuses from './NamespaceStatuses';
-import OverviewCardSparklineCharts from './OverviewCardSparklineCharts';
+import OverviewCardSparklineCharts from './OverviewCardSparklineChartsComponent';
 import OverviewTrafficPolicies from './OverviewTrafficPolicies';
 import { IstioMetricsOptions } from '../../types/MetricsOptions';
 import { computePrometheusRateParams } from '../../services/Prometheus';
@@ -61,7 +61,7 @@ import * as Sorts from './Sorts';
 import * as Filters from './Filters';
 import ValidationSummary from '../../components/Validations/ValidationSummary';
 import { DurationInSeconds, IntervalInMilliseconds } from 'types/Common';
-import { Paths, serverConfig } from '../../config';
+import { Paths, isMultiCluster, serverConfig } from '../../config';
 import { PFColors } from '../../components/Pf/PfColors';
 import VirtualList from '../../components/VirtualList/VirtualList';
 import { OverviewNamespaceAction, OverviewNamespaceActions } from './OverviewNamespaceActions';
@@ -81,6 +81,8 @@ import { IstiodResourceThresholds } from 'types/IstioStatus';
 import TLSInfo from 'components/Overview/TLSInfo';
 import CanaryUpgradeProgress from './CanaryUpgradeProgress';
 import ControlPlaneVersionBadge from './ControlPlaneVersionBadge';
+import AmbientBadge from '../../components/Ambient/AmbientBadge';
+import { PFBadge, PFBadges } from 'components/Pf/PfBadges';
 
 const gridStyleCompact = style({
   backgroundColor: '#f5f5f5',
@@ -150,6 +152,7 @@ type State = {
   showTrafficPoliciesModal: boolean;
   kind: string;
   nsTarget: string;
+  clusterTarget?: string;
   opTarget: string;
   grafanaLinks: ExternalLink[];
   istiodResourceThresholds: IstiodResourceThresholds;
@@ -187,6 +190,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
       showTrafficPoliciesModal: false,
       kind: '',
       nsTarget: '',
+      clusterTarget: '',
       opTarget: '',
       grafanaLinks: [],
       istiodResourceThresholds: { memory: 0, cpu: 0 },
@@ -243,6 +247,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
             const previous = this.state.namespaces.find(prev => prev.name === ns.name);
             return {
               name: ns.name,
+              cluster: ns.cluster,
               status: previous ? previous.status : undefined,
               tlsStatus: previous ? previous.tlsStatus : undefined,
               metrics: previous ? previous.metrics : undefined,
@@ -357,6 +362,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
       chunk.map(nsInfo => {
         const healthPromise: Promise<NamespaceAppHealth | NamespaceWorkloadHealth | NamespaceServiceHealth> = apiFunc(
           nsInfo.name,
+          nsInfo.cluster ? nsInfo.cluster : '',
           duration
         );
         return healthPromise.then(rs => ({ health: rs, nsInfo: nsInfo }));
@@ -371,6 +377,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
             inSuccess: [],
             notAvailable: []
           };
+
           Object.keys(result.health).forEach(item => {
             const health: Health = result.health[item];
             const status = health.getGlobalStatus();
@@ -491,6 +498,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
       nss.push(ns.name);
     });
 
+    // TODO: Do we need the cluster here?
     return Promise.all([API.getConfigValidations(nss), API.getAllIstioConfigs(nss, [], false, '', '')])
       .then(results => {
         chunk.forEach(nsInfo => {
@@ -679,7 +687,13 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           isSeparator: false,
           title: 'Enable Auto Injection',
           action: (ns: string) =>
-            this.setState({ showTrafficPoliciesModal: true, nsTarget: ns, opTarget: 'enable', kind: 'injection' })
+            this.setState({
+              showTrafficPoliciesModal: true,
+              nsTarget: ns,
+              opTarget: 'enable',
+              kind: 'injection',
+              clusterTarget: nsInfo.cluster
+            })
         };
         const disableAction = {
           'data-test': `disable-${nsInfo.name}-namespace-sidecar-injection`,
@@ -687,7 +701,13 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           isSeparator: false,
           title: 'Disable Auto Injection',
           action: (ns: string) =>
-            this.setState({ showTrafficPoliciesModal: true, nsTarget: ns, opTarget: 'disable', kind: 'injection' })
+            this.setState({
+              showTrafficPoliciesModal: true,
+              nsTarget: ns,
+              opTarget: 'disable',
+              kind: 'injection',
+              clusterTarget: nsInfo.cluster
+            })
         };
         const removeAction = {
           'data-test': `remove-${nsInfo.name}-namespace-sidecar-injection`,
@@ -695,7 +715,13 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           isSeparator: false,
           title: 'Remove Auto Injection',
           action: (ns: string) =>
-            this.setState({ showTrafficPoliciesModal: true, nsTarget: ns, opTarget: 'remove', kind: 'injection' })
+            this.setState({
+              showTrafficPoliciesModal: true,
+              nsTarget: ns,
+              opTarget: 'remove',
+              kind: 'injection',
+              clusterTarget: nsInfo.cluster
+            })
         };
         if (
           nsInfo.labels &&
@@ -731,14 +757,26 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           isSeparator: false,
           title: 'Upgrade to ' + serverConfig.istioCanaryRevision.upgrade + ' revision',
           action: (ns: string) =>
-            this.setState({ opTarget: 'upgrade', kind: 'canary', nsTarget: ns, showTrafficPoliciesModal: true })
+            this.setState({
+              opTarget: 'upgrade',
+              kind: 'canary',
+              nsTarget: ns,
+              showTrafficPoliciesModal: true,
+              clusterTarget: nsInfo.cluster
+            })
         };
         const downgradeAction = {
           isGroup: false,
           isSeparator: false,
           title: 'Downgrade to ' + serverConfig.istioCanaryRevision.current + ' revision',
           action: (ns: string) =>
-            this.setState({ opTarget: 'current', kind: 'canary', nsTarget: ns, showTrafficPoliciesModal: true })
+            this.setState({
+              opTarget: 'current',
+              kind: 'canary',
+              nsTarget: ns,
+              showTrafficPoliciesModal: true,
+              clusterTarget: nsInfo.cluster
+            })
         };
         if (
           nsInfo.labels &&
@@ -766,6 +804,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           this.setState({
             opTarget: aps.length === 0 ? 'create' : 'update',
             nsTarget: ns,
+            clusterTarget: nsInfo.cluster,
             showTrafficPoliciesModal: true,
             kind: 'policy'
           });
@@ -776,7 +815,13 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
         isSeparator: false,
         title: 'Delete Traffic Policies',
         action: (ns: string) =>
-          this.setState({ opTarget: 'delete', nsTarget: ns, showTrafficPoliciesModal: true, kind: 'policy' })
+          this.setState({
+            opTarget: 'delete',
+            nsTarget: ns,
+            showTrafficPoliciesModal: true,
+            kind: 'policy',
+            clusterTarget: nsInfo.cluster
+          })
       };
       if (this.props.istioAPIEnabled) {
         namespaceActions.push({
@@ -816,6 +861,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
     this.setState({
       showTrafficPoliciesModal: false,
       nsTarget: '',
+      clusterTarget: '',
       opTarget: '',
       kind: ''
     });
@@ -846,7 +892,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
       const actions = this.getNamespaceActions(ns);
       return <OverviewNamespaceActions key={'namespaceAction_' + i} namespace={ns.name} actions={actions} />;
     });
-
+    const hiddenColumns = isMultiCluster() ? ([] as string[]) : ['cluster'];
     return (
       <>
         <OverviewToolbarContainer
@@ -867,6 +913,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
                 sort={this.sort}
                 statefulProps={this.sFOverviewToolbar}
                 actions={namespaceActions}
+                hiddenColumns={hiddenColumns}
               />
             ) : (
               <Grid>
@@ -888,7 +935,7 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
                           ? lg
                           : md
                       }
-                      key={'CardItem_' + ns.name}
+                      key={'CardItem_' + ns.name + ns.cluster}
                       style={{ margin: '0px 5px 0 5px' }}
                     >
                       <Card
@@ -929,12 +976,24 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
                                     Istio API disabled
                                   </Label>
                                 )}
+                                {serverConfig.ambientEnabled &&
+                                  ns.name !== serverConfig.istioNamespace &&
+                                  ns.labels &&
+                                  ns.labels['istio.io/dataplane-mode'] === 'ambient' && (
+                                    <AmbientBadge tooltip={true}></AmbientBadge>
+                                  )}
                               </span>
                             </Title>
                           </CardHeaderMain>
                           <CardActions>{namespaceActions[i]}</CardActions>
                         </CardHeader>
                         <CardBody>
+                          {isMultiCluster() && ns.cluster && (
+                            <div style={{ textAlign: 'left', paddingBottom: 3 }}>
+                              <PFBadge badge={PFBadges.Cluster} position={TooltipPosition.right} />
+                              {ns.cluster}
+                            </div>
+                          )}
                           {ns.name === serverConfig.istioNamespace &&
                             this.state.displayMode === OverviewDisplayMode.EXPAND && (
                               <Grid>
@@ -1036,7 +1095,11 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           kind={this.state.kind}
           hideConfirmModal={this.hideTrafficManagement}
           nsTarget={this.state.nsTarget}
-          nsInfo={this.state.namespaces.filter(ns => ns.name === this.state.nsTarget)[0]}
+          nsInfo={
+            this.state.namespaces.filter(
+              ns => ns.name === this.state.nsTarget && ns.cluster === this.state.clusterTarget
+            )[0]
+          }
           duration={this.props.duration}
           load={this.load}
         />
@@ -1092,7 +1155,6 @@ export class OverviewPage extends React.Component<OverviewProps, State> {
           errorMetrics={ns.errorMetrics}
           controlPlaneMetrics={ns.controlPlaneMetrics}
           istiodResourceThresholds={this.state.istiodResourceThresholds}
-          istioAPIEnabled={this.props.istioAPIEnabled}
         />
       );
     }

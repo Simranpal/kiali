@@ -21,9 +21,7 @@ import (
 	"github.com/kiali/kiali/util/httputil"
 )
 
-var (
-	invalidLabelCharRE = regexp.MustCompile(`[^a-zA-Z0-9_]`)
-)
+var invalidLabelCharRE = regexp.MustCompile(`[^a-zA-Z0-9_]`)
 
 // ClientInterface for mocks (only mocked function are necessary here)
 type ClientInterface interface {
@@ -31,13 +29,13 @@ type ClientInterface interface {
 	FetchHistogramValues(metricName, labels, grouping, rateInterval string, avg bool, quantiles []string, queryTime time.Time) (map[string]model.Vector, error)
 	FetchRange(metricName, labels, grouping, aggregator string, q *RangeQuery) Metric
 	FetchRateRange(metricName string, labels []string, grouping string, q *RangeQuery) Metric
-	GetAllRequestRates(namespace, ratesInterval string, queryTime time.Time) (model.Vector, error)
-	GetAppRequestRates(namespace, app, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error)
+	GetAllRequestRates(namespace, cluster, ratesInterval string, queryTime time.Time) (model.Vector, error)
+	GetAppRequestRates(namespace, cluster, app, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error)
 	GetConfiguration() (prom_v1.ConfigResult, error)
 	GetFlags() (prom_v1.FlagsResult, error)
-	GetNamespaceServicesRequestRates(namespace, ratesInterval string, queryTime time.Time) (model.Vector, error)
-	GetServiceRequestRates(namespace, service, ratesInterval string, queryTime time.Time) (model.Vector, error)
-	GetWorkloadRequestRates(namespace, workload, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error)
+	GetNamespaceServicesRequestRates(namespace, cluster, ratesInterval string, queryTime time.Time) (model.Vector, error)
+	GetServiceRequestRates(namespace, cluster, service, ratesInterval string, queryTime time.Time) (model.Vector, error)
+	GetWorkloadRequestRates(namespace, cluster, workload, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error)
 	GetMetricsForLabels(metricNames []string, labels string) ([]string, error)
 }
 
@@ -50,8 +48,10 @@ type Client struct {
 	ctx context.Context
 }
 
-var once sync.Once
-var promCache PromCache
+var (
+	once      sync.Once
+	promCache PromCache
+)
 
 func initPromCache() {
 	if config.Get().ExternalServices.Prometheus.CacheEnabled {
@@ -125,19 +125,19 @@ func (in *Client) Inject(api prom_v1.API) {
 // be inflated due to duplication, and therefore should be used mainly for calculating ratios
 // (e.g total rates / error rates).
 // Returns (rates, error)
-func (in *Client) GetAllRequestRates(namespace string, ratesInterval string, queryTime time.Time) (model.Vector, error) {
+func (in *Client) GetAllRequestRates(namespace, cluster string, ratesInterval string, queryTime time.Time) (model.Vector, error) {
 	log.Tracef("GetAllRequestRates [namespace: %s] [ratesInterval: %s] [queryTime: %s]", namespace, ratesInterval, queryTime.String())
 	if promCache != nil {
-		if isCached, result := promCache.GetAllRequestRates(namespace, ratesInterval, queryTime); isCached {
+		if isCached, result := promCache.GetAllRequestRates(namespace, cluster, ratesInterval, queryTime); isCached {
 			return result, nil
 		}
 	}
-	result, err := getAllRequestRates(in.ctx, in.api, namespace, queryTime, ratesInterval)
+	result, err := getAllRequestRates(in.ctx, in.api, namespace, cluster, queryTime, ratesInterval)
 	if err != nil {
 		return result, err
 	}
 	if promCache != nil {
-		promCache.SetAllRequestRates(namespace, ratesInterval, queryTime, result)
+		promCache.SetAllRequestRates(namespace, cluster, ratesInterval, queryTime, result)
 	}
 	return result, nil
 }
@@ -147,19 +147,19 @@ func (in *Client) GetAllRequestRates(namespace string, ratesInterval string, que
 // be inflated due to duplication, and therefore should be used mainly for calculating ratios
 // (e.g total rates / error rates).
 // Returns (rates, error)
-func (in *Client) GetNamespaceServicesRequestRates(namespace string, ratesInterval string, queryTime time.Time) (model.Vector, error) {
+func (in *Client) GetNamespaceServicesRequestRates(namespace, cluster string, ratesInterval string, queryTime time.Time) (model.Vector, error) {
 	log.Tracef("GetNamespaceServicesRequestRates [namespace: %s] [ratesInterval: %s] [queryTime: %s]", namespace, ratesInterval, queryTime.String())
 	if promCache != nil {
-		if isCached, result := promCache.GetNamespaceServicesRequestRates(namespace, ratesInterval, queryTime); isCached {
+		if isCached, result := promCache.GetNamespaceServicesRequestRates(namespace, cluster, ratesInterval, queryTime); isCached {
 			return result, nil
 		}
 	}
-	result, err := getNamespaceServicesRequestRates(in.ctx, in.api, namespace, queryTime, ratesInterval)
+	result, err := getNamespaceServicesRequestRates(in.ctx, in.api, namespace, cluster, queryTime, ratesInterval)
 	if err != nil {
 		return result, err
 	}
 	if promCache != nil {
-		promCache.SetNamespaceServicesRequestRates(namespace, ratesInterval, queryTime, result)
+		promCache.SetNamespaceServicesRequestRates(namespace, cluster, ratesInterval, queryTime, result)
 	}
 	return result, nil
 }
@@ -169,19 +169,19 @@ func (in *Client) GetNamespaceServicesRequestRates(namespace string, ratesInterv
 // be inflated due to duplication, and therefore should be used mainly for calculating ratios
 // (e.g total rates / error rates).
 // Returns (in, error)
-func (in *Client) GetServiceRequestRates(namespace, service, ratesInterval string, queryTime time.Time) (model.Vector, error) {
+func (in *Client) GetServiceRequestRates(namespace, cluster, service, ratesInterval string, queryTime time.Time) (model.Vector, error) {
 	log.Tracef("GetServiceRequestRates [namespace: %s] [service: %s] [ratesInterval: %s] [queryTime: %s]", namespace, service, ratesInterval, queryTime.String())
 	if promCache != nil {
-		if isCached, result := promCache.GetServiceRequestRates(namespace, service, ratesInterval, queryTime); isCached {
+		if isCached, result := promCache.GetServiceRequestRates(namespace, cluster, service, ratesInterval, queryTime); isCached {
 			return result, nil
 		}
 	}
-	result, err := getServiceRequestRates(in.ctx, in.api, namespace, service, queryTime, ratesInterval)
+	result, err := getServiceRequestRates(in.ctx, in.api, namespace, cluster, service, queryTime, ratesInterval)
 	if err != nil {
 		return result, err
 	}
 	if promCache != nil {
-		promCache.SetServiceRequestRates(namespace, service, ratesInterval, queryTime, result)
+		promCache.SetServiceRequestRates(namespace, cluster, service, ratesInterval, queryTime, result)
 	}
 	return result, nil
 }
@@ -191,19 +191,19 @@ func (in *Client) GetServiceRequestRates(namespace, service, ratesInterval strin
 // be inflated due to duplication, and therefore should be used mainly for calculating ratios
 // (e.g total rates / error rates).
 // Returns (in, out, error)
-func (in *Client) GetAppRequestRates(namespace, app, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
-	log.Tracef("GetAppRequestRates [namespace: %s] [app: %s] [ratesInterval: %s] [queryTime: %s]", namespace, app, ratesInterval, queryTime.String())
+func (in *Client) GetAppRequestRates(namespace, cluster, app, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
+	log.Tracef("GetAppRequestRates [namespace: %s] [cluster: %s] [app: %s] [ratesInterval: %s] [queryTime: %s]", namespace, cluster, app, ratesInterval, queryTime.String())
 	if promCache != nil {
-		if isCached, inResult, outResult := promCache.GetAppRequestRates(namespace, app, ratesInterval, queryTime); isCached {
+		if isCached, inResult, outResult := promCache.GetAppRequestRates(namespace, cluster, app, ratesInterval, queryTime); isCached {
 			return inResult, outResult, nil
 		}
 	}
-	inResult, outResult, err := getItemRequestRates(in.ctx, in.api, namespace, app, "app", queryTime, ratesInterval)
+	inResult, outResult, err := getItemRequestRates(in.ctx, in.api, namespace, cluster, app, "app", queryTime, ratesInterval)
 	if err != nil {
 		return inResult, outResult, err
 	}
 	if promCache != nil {
-		promCache.SetAppRequestRates(namespace, app, ratesInterval, queryTime, inResult, outResult)
+		promCache.SetAppRequestRates(namespace, cluster, app, ratesInterval, queryTime, inResult, outResult)
 	}
 	return inResult, outResult, nil
 }
@@ -213,19 +213,19 @@ func (in *Client) GetAppRequestRates(namespace, app, ratesInterval string, query
 // be inflated due to duplication, and therefore should be used mainly for calculating ratios
 // (e.g total rates / error rates).
 // Returns (in, out, error)
-func (in *Client) GetWorkloadRequestRates(namespace, workload, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
+func (in *Client) GetWorkloadRequestRates(namespace, cluster, workload, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
 	log.Tracef("GetWorkloadRequestRates [namespace: %s] [workload: %s] [ratesInterval: %s] [queryTime: %s]", namespace, workload, ratesInterval, queryTime.String())
 	if promCache != nil {
-		if isCached, inResult, outResult := promCache.GetWorkloadRequestRates(namespace, workload, ratesInterval, queryTime); isCached {
+		if isCached, inResult, outResult := promCache.GetWorkloadRequestRates(namespace, cluster, workload, ratesInterval, queryTime); isCached {
 			return inResult, outResult, nil
 		}
 	}
-	inResult, outResult, err := getItemRequestRates(in.ctx, in.api, namespace, workload, "workload", queryTime, ratesInterval)
+	inResult, outResult, err := getItemRequestRates(in.ctx, in.api, namespace, cluster, workload, "workload", queryTime, ratesInterval)
 	if err != nil {
 		return inResult, outResult, err
 	}
 	if promCache != nil {
-		promCache.SetWorkloadRequestRates(namespace, workload, ratesInterval, queryTime, inResult, outResult)
+		promCache.SetWorkloadRequestRates(namespace, cluster, workload, ratesInterval, queryTime, inResult, outResult)
 	}
 	return inResult, outResult, nil
 }

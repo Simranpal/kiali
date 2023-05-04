@@ -56,6 +56,7 @@ func (o *PromAPIMock) LabelNames(ctx context.Context, matches []string, startTim
 	args := o.Called(ctx, matches, startTime, endTime)
 	return args.Get(0).([]string), args.Get(1).(prom_v1.Warnings), nil
 }
+
 func (o *PromAPIMock) LabelValues(ctx context.Context, label string, matches []string, startTime time.Time, endTime time.Time) (model.LabelValues, prom_v1.Warnings, error) {
 	args := o.Called(ctx, label, matches, startTime, endTime)
 	return args.Get(0).(model.LabelValues), nil, nil
@@ -140,8 +141,11 @@ func singleValueMatrix(ret model.SampleValue) model.Matrix {
 				"reporter": "destination",
 				"__name__": "whatever",
 				"instance": "whatever",
-				"job":      "whatever"},
-			Values: []model.SamplePair{{Timestamp: 0, Value: ret}}}}
+				"job":      "whatever",
+			},
+			Values: []model.SamplePair{{Timestamp: 0, Value: ret}},
+		},
+	}
 }
 
 func emptyMatrix() model.Matrix {
@@ -151,8 +155,11 @@ func emptyMatrix() model.Matrix {
 				"reporter": "destination",
 				"__name__": "whatever",
 				"instance": "whatever",
-				"job":      "whatever"},
-			Values: []model.SamplePair{}}}
+				"job":      "whatever",
+			},
+			Values: []model.SamplePair{},
+		},
+	}
 }
 
 func (o *PromAPIMock) MockRangeErr(query string, ret model.SampleValue) {
@@ -208,7 +215,8 @@ func (o *PromAPIMock) AlwaysReturnEmpty() {
 	metric := model.Metric{
 		"__name__": "whatever",
 		"instance": "whatever",
-		"job":      "whatever"}
+		"job":      "whatever",
+	}
 	o.On(
 		"Query",
 		mock.AnythingOfType("*context.emptyCtx"),
@@ -218,7 +226,9 @@ func (o *PromAPIMock) AlwaysReturnEmpty() {
 	matrix := model.Matrix{
 		&model.SampleStream{
 			Metric: metric,
-			Values: []model.SamplePair{}}}
+			Values: []model.SamplePair{},
+		},
+	}
 	o.On(
 		"QueryRange",
 		mock.AnythingOfType("*context.emptyCtx"),
@@ -233,7 +243,8 @@ func (o *PromAPIMock) SpyArgumentsAndReturnEmpty(fn func(args mock.Arguments)) {
 	metric := model.Metric{
 		"__name__": "whatever",
 		"instance": "whatever",
-		"job":      "whatever"}
+		"job":      "whatever",
+	}
 	o.On(
 		"Query",
 		mock.AnythingOfType("*context.emptyCtx"),
@@ -243,7 +254,9 @@ func (o *PromAPIMock) SpyArgumentsAndReturnEmpty(fn func(args mock.Arguments)) {
 	matrix := model.Matrix{
 		&model.SampleStream{
 			Metric: metric,
-			Values: []model.SamplePair{}}}
+			Values: []model.SamplePair{},
+		},
+	}
 	o.On(
 		"QueryRange",
 		mock.AnythingOfType("*context.emptyCtx"),
@@ -257,13 +270,13 @@ type PromClientMock struct {
 }
 
 // MockAllRequestRates mocks GetAllRequestRates for given namespace, rateInverval and queryTime, returning out vector
-func (o *PromClientMock) MockAllRequestRates(namespace, ratesInterval string, queryTime time.Time, out model.Vector) {
-	o.On("GetAllRequestRates", namespace, ratesInterval, queryTime).Return(out, nil)
+func (o *PromClientMock) MockAllRequestRates(namespace, cluster, ratesInterval string, queryTime time.Time, out model.Vector) {
+	o.On("GetAllRequestRates", namespace, cluster, ratesInterval, queryTime).Return(out, nil)
 }
 
 // MockAppRequestRates mocks GetAppRequestRates for given namespace and app, returning in & out vectors
-func (o *PromClientMock) MockAppRequestRates(namespace, app string, in, out model.Vector) {
-	o.On("GetAppRequestRates", namespace, app, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(in, out, nil)
+func (o *PromClientMock) MockAppRequestRates(namespace, cluster, app string, in, out model.Vector) {
+	o.On("GetAppRequestRates", namespace, cluster, app, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(in, out, nil)
 }
 
 // MockNamespaceServicesRequestRates mocks GetNamespaceServicesRequestRates for given namespace, rateInterval and queryTime, returning out vector
@@ -272,13 +285,13 @@ func (o *PromClientMock) MockNamespaceServicesRequestRates(namespace, ratesInter
 }
 
 // MockServiceRequestRates mocks GetServiceRequestRates for given namespace and service, returning in vector
-func (o *PromClientMock) MockServiceRequestRates(namespace, service string, in model.Vector) {
-	o.On("GetServiceRequestRates", namespace, service, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(in, nil)
+func (o *PromClientMock) MockServiceRequestRates(namespace, cluster, service string, in model.Vector) {
+	o.On("GetServiceRequestRates", namespace, cluster, service, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(in, nil)
 }
 
 // MockWorkloadRequestRates mocks GetWorkloadRequestRates for given namespace and workload, returning in & out vectors
-func (o *PromClientMock) MockWorkloadRequestRates(namespace, wkld string, in, out model.Vector) {
-	o.On("GetWorkloadRequestRates", namespace, wkld, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(in, out, nil)
+func (o *PromClientMock) MockWorkloadRequestRates(namespace, cluster, wkld string, in, out model.Vector) {
+	o.On("GetWorkloadRequestRates", namespace, cluster, wkld, mock.AnythingOfType("string"), mock.AnythingOfType("time.Time")).Return(in, out, nil)
 }
 
 // MockMetricsForLabels mocks GetMetricsForLabels
@@ -286,8 +299,8 @@ func (o *PromClientMock) MockMetricsForLabels(metrics []string) {
 	o.On("GetMetricsForLabels", mock.AnythingOfType("[]string"), mock.AnythingOfType("string")).Return(metrics, nil)
 }
 
-func (o *PromClientMock) GetAllRequestRates(namespace, ratesInterval string, queryTime time.Time) (model.Vector, error) {
-	args := o.Called(namespace, ratesInterval, queryTime)
+func (o *PromClientMock) GetAllRequestRates(namespace, cluster, ratesInterval string, queryTime time.Time) (model.Vector, error) {
+	args := o.Called(namespace, cluster, ratesInterval, queryTime)
 	return args.Get(0).(model.Vector), args.Error(1)
 }
 
@@ -301,23 +314,23 @@ func (o *PromClientMock) GetFlags() (prom_v1.FlagsResult, error) {
 	return args.Get(0).(prom_v1.FlagsResult), args.Error(1)
 }
 
-func (o *PromClientMock) GetNamespaceServicesRequestRates(namespace, ratesInterval string, queryTime time.Time) (model.Vector, error) {
-	args := o.Called(namespace, ratesInterval, queryTime)
+func (o *PromClientMock) GetNamespaceServicesRequestRates(namespace, cluster, ratesInterval string, queryTime time.Time) (model.Vector, error) {
+	args := o.Called(namespace, cluster, ratesInterval, queryTime)
 	return args.Get(0).(model.Vector), args.Error(1)
 }
 
-func (o *PromClientMock) GetAppRequestRates(namespace, app, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
-	args := o.Called(namespace, app, ratesInterval, queryTime)
+func (o *PromClientMock) GetAppRequestRates(namespace, cluster, app, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
+	args := o.Called(namespace, cluster, app, ratesInterval, queryTime)
 	return args.Get(0).(model.Vector), args.Get(1).(model.Vector), args.Error(2)
 }
 
-func (o *PromClientMock) GetServiceRequestRates(namespace, service, ratesInterval string, queryTime time.Time) (model.Vector, error) {
-	args := o.Called(namespace, service, ratesInterval, queryTime)
+func (o *PromClientMock) GetServiceRequestRates(namespace, cluster, service, ratesInterval string, queryTime time.Time) (model.Vector, error) {
+	args := o.Called(namespace, cluster, service, ratesInterval, queryTime)
 	return args.Get(0).(model.Vector), args.Error(1)
 }
 
-func (o *PromClientMock) GetWorkloadRequestRates(namespace, workload, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
-	args := o.Called(namespace, workload, ratesInterval, queryTime)
+func (o *PromClientMock) GetWorkloadRequestRates(namespace, cluster, workload, ratesInterval string, queryTime time.Time) (model.Vector, model.Vector, error) {
+	args := o.Called(namespace, cluster, workload, ratesInterval, queryTime)
 	return args.Get(0).(model.Vector), args.Get(1).(model.Vector), args.Error(2)
 }
 

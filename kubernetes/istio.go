@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/yaml.v2"
 	api_networking_v1beta1 "istio.io/api/networking/v1beta1"
 	extentions_v1alpha1 "istio.io/client-go/pkg/apis/extensions/v1alpha1"
 	networking_v1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
@@ -23,6 +22,7 @@ import (
 	istio "istio.io/client-go/pkg/clientset/versioned"
 	core_v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	k8s_networking_v1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	gatewayapiclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
@@ -678,7 +678,7 @@ func GetIstioConfigMap(istioConfig *core_v1.ConfigMap) (*IstioMeshConfig, error)
 		return nil, fmt.Errorf(errMsg, istioConfig)
 	}
 
-	err = yaml.Unmarshal([]byte(meshConfigYaml), &meshConfig)
+	err = k8syaml.Unmarshal([]byte(meshConfigYaml), &meshConfig)
 	if err != nil {
 		log.Warningf("GetIstioConfigMap: Cannot read Istio mesh configuration.")
 		return nil, err
@@ -848,4 +848,44 @@ func DestinationRuleHasMTLSEnabled(destinationRule *networking_v1beta1.Destinati
 		return mode == "ISTIO_MUTUAL", mode
 	}
 	return false, ""
+}
+
+// ClusterInfoFromIstiod attempts to resolve the cluster info of the "home" cluster where kiali is running
+// by inspecting the istiod deployment. Assumes that the istiod deployment is in the same cluster as the kiali pod.
+func ClusterInfoFromIstiod(conf config.Config, k8s ClientInterface) (string, bool, error) {
+	// The "cluster_id" is set in an environment variable of
+	// the "istiod" deployment. Let's try to fetch it.
+	istioDeploymentConfig := conf.ExternalServices.Istio.IstiodDeploymentName
+	istiodDeployment, err := k8s.GetDeployment(conf.IstioNamespace, istioDeploymentConfig)
+	if err != nil {
+		return "", false, err
+	}
+
+	istiodContainers := istiodDeployment.Spec.Template.Spec.Containers
+	if len(istiodContainers) == 0 {
+		return "", false, fmt.Errorf("istiod deployment [%s] has no containers", istioDeploymentConfig)
+	}
+
+	clusterName := ""
+	for _, v := range istiodContainers[0].Env {
+		if v.Name == "CLUSTER_ID" {
+			clusterName = v.Value
+			break
+		}
+	}
+
+	gatewayToNamespace := false
+	for _, v := range istiodContainers[0].Env {
+		if v.Name == "PILOT_SCOPE_GATEWAY_TO_NAMESPACE" {
+			gatewayToNamespace = v.Value == "true"
+			break
+		}
+	}
+
+	if clusterName == "" {
+		// We didn't find it. This may mean that Istio is not setup with multi-cluster enabled.
+		return "", false, fmt.Errorf("istiod deployment [%s] does not have the CLUSTER_ID environment variable set", istioDeploymentConfig)
+	}
+
+	return clusterName, gatewayToNamespace, nil
 }

@@ -68,12 +68,14 @@ func ServiceTraces(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	namespace := params["namespace"]
 	service := params["service"]
-	q, err := readQuery(r.URL.Query())
+	query := r.URL.Query()
+	q, err := readQuery(query)
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	traces, err := business.Jaeger.GetServiceTraces(r.Context(), namespace, service, q)
+	cluster := clusterNameFromQuery(query)
+	traces, err := business.Jaeger.GetServiceTraces(r.Context(), namespace, service, q, cluster)
 	if err != nil {
 		RespondWithError(w, http.StatusServiceUnavailable, err.Error())
 		return
@@ -87,6 +89,7 @@ func WorkloadTraces(w http.ResponseWriter, r *http.Request) {
 		RespondWithError(w, http.StatusInternalServerError, "WorkloadTraces initialization error: "+err.Error())
 		return
 	}
+
 	params := mux.Vars(r)
 	namespace := params["namespace"]
 	workload := params["workload"]
@@ -185,13 +188,15 @@ func ServiceSpans(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	namespace := params["namespace"]
 	service := params["service"]
-	q, err := readQuery(r.URL.Query())
+	query := r.URL.Query()
+	q, err := readQuery(query)
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	spans, err := business.Jaeger.GetServiceSpans(r.Context(), namespace, service, q)
+	cluster := clusterNameFromQuery(query)
+	spans, err := business.Jaeger.GetServiceSpans(r.Context(), namespace, service, q, cluster)
 	if err != nil {
 		RespondWithError(w, http.StatusServiceUnavailable, err.Error())
 		return
@@ -228,9 +233,10 @@ func WorkloadSpans(w http.ResponseWriter, r *http.Request) {
 
 func readQuery(values url.Values) (models.TracingQuery, error) {
 	q := models.TracingQuery{
-		End:   time.Now(),
-		Limit: 100,
-		Tags:  make(map[string]string),
+		End:     time.Now(),
+		Limit:   100,
+		Tags:    make(map[string]string),
+		Cluster: clusterNameFromQuery(values),
 	}
 
 	if v := values.Get("startMicros"); v != "" {

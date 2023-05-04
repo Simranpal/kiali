@@ -41,7 +41,8 @@ func (in *TLSService) MeshWidemTLSStatus(ctx context.Context, namespaces []strin
 		IncludeDestinationRules:    true,
 		IncludePeerAuthentications: true,
 	}
-	istioConfigList, err := in.businessLayer.IstioConfig.GetIstioConfigList(ctx, criteria)
+	// @TODO hardcoded HomeClusterName
+	istioConfigList, err := in.businessLayer.IstioConfig.GetIstioConfigListPerCluster(ctx, criteria, kubernetes.HomeClusterName)
 	if err != nil {
 		return models.MTLSStatus{}, err
 	}
@@ -57,14 +58,13 @@ func (in *TLSService) MeshWidemTLSStatus(ctx context.Context, namespaces []strin
 	}
 
 	minTLS, err := in.businessLayer.IstioCerts.GetTlsMinVersion()
-
 	if err != nil {
 		log.Errorf("Error getting TLS min version: %s ", err)
 	}
 
 	return models.MTLSStatus{
 		Status:          mtlsStatus.MeshMtlsStatus().OverallStatus,
-		AutoMTLSEnabled: *in.enabledAutoMtls,
+		AutoMTLSEnabled: mtlsStatus.AutoMtlsEnabled,
 		MinTLS:          minTLS,
 	}, nil
 }
@@ -87,7 +87,8 @@ func (in *TLSService) NamespaceWidemTLSStatus(ctx context.Context, namespace str
 		IncludeDestinationRules:    true,
 		IncludePeerAuthentications: true,
 	}
-	istioConfigList, err2 := in.businessLayer.IstioConfig.GetIstioConfigList(ctx, criteria)
+	// @TODO
+	istioConfigList, err2 := in.businessLayer.IstioConfig.GetIstioConfigListPerCluster(ctx, criteria, kubernetes.HomeClusterName)
 	if err2 != nil {
 		return models.MTLSStatus{}, err2
 	}
@@ -107,7 +108,7 @@ func (in *TLSService) NamespaceWidemTLSStatus(ctx context.Context, namespace str
 
 	return models.MTLSStatus{
 		Status:          mtlsStatus.NamespaceMtlsStatus(namespace).OverallStatus,
-		AutoMTLSEnabled: *in.enabledAutoMtls,
+		AutoMTLSEnabled: mtlsStatus.AutoMtlsEnabled,
 	}, nil
 }
 
@@ -125,7 +126,7 @@ func (in *TLSService) GetAllDestinationRules(ctx context.Context, namespaces []s
 		IncludeDestinationRules: true,
 	}
 
-	istioConfigList, err := in.businessLayer.IstioConfig.GetIstioConfigList(ctx, criteria)
+	istioConfigList, err := in.businessLayer.IstioConfig.GetIstioConfigListPerCluster(ctx, criteria, kubernetes.HomeClusterName)
 	if err != nil {
 		return nil, err
 	}

@@ -32,6 +32,7 @@ export interface AppNode {
   name: string;
   version: string;
   isInaccessible: boolean;
+  cluster?: string;
 }
 
 export interface WorkloadNode {
@@ -41,6 +42,7 @@ export interface WorkloadNode {
   name: string;
   isInaccessible: boolean;
   healthAnnotation?: HealthAnnotationType;
+  cluster?: string;
 }
 
 export interface ServiceNode {
@@ -52,6 +54,7 @@ export interface ServiceNode {
   isServiceEntry?: SEInfo;
   destServices?: DestService[];
   healthAnnotation?: HealthAnnotationType;
+  cluster?: string;
 }
 
 export type TrafficNode = AppNode | ServiceNode | WorkloadNode;
@@ -75,6 +78,7 @@ type TrafficDetailsProps = ReduxProps & {
   itemType: MetricsObjectTypes;
   lastRefreshAt: TimeInMilliseconds;
   namespace: string;
+  cluster?: string;
 };
 
 type TrafficDetailsState = {
@@ -173,7 +177,8 @@ class TrafficDetails extends React.Component<TrafficDetailsProps, TrafficDetails
         const params = this.graphDataSource.fetchForWorkloadParams(
           this.props.duration,
           this.props.namespace,
-          this.props.itemName
+          this.props.itemName,
+          this.props.cluster
         );
         params.includeHealth = false;
         params.injectServiceNodes = false;
@@ -218,6 +223,7 @@ class TrafficDetails extends React.Component<TrafficDetailsProps, TrafficDetails
           id: `${prefix}-${node.id}`,
           type: node.nodeType,
           namespace: node.namespace,
+          cluster: node.cluster,
           name: node.app || 'unknown',
           version: node.version || '',
           isInaccessible: node.isInaccessible || false
@@ -227,6 +233,7 @@ class TrafficDetails extends React.Component<TrafficDetailsProps, TrafficDetails
           id: `${prefix}-${node.id}`,
           type: node.nodeType,
           namespace: node.namespace,
+          cluster: node.cluster,
           name: node.service || 'unknown',
           isServiceEntry: node.isServiceEntry,
           isInaccessible: node.isInaccessible || false,
@@ -238,6 +245,7 @@ class TrafficDetails extends React.Component<TrafficDetailsProps, TrafficDetails
           id: `${prefix}-${node.id}`,
           type: NodeType.WORKLOAD,
           namespace: node.namespace,
+          cluster: node.cluster,
           name: node.workload || 'unknown',
           isInaccessible: node.isInaccessible || false,
           healthAnnotation: node.hasHealthConfig

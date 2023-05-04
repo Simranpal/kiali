@@ -4,7 +4,7 @@ import { LoginSession } from '../store/Store';
 import { App } from '../types/App';
 import { AppList } from '../types/AppList';
 import { AuthInfo } from '../types/Auth';
-import { DurationInSeconds, HomeClusterName, HTTP_VERBS, Password, TimeInSeconds, UserName } from '../types/Common';
+import { DurationInSeconds, HTTP_VERBS, Password, TimeInSeconds, UserName } from '../types/Common';
 import { DashboardModel } from 'types/Dashboards';
 import { GrafanaInfo } from '../types/GrafanaInfo';
 import { GraphDefinition, NodeParamsType, NodeType } from '../types/Graph';
@@ -164,8 +164,8 @@ export const getNamespaceValidations = (namespace: string) => {
   return newRequest<ValidationStatus>(HTTP_VERBS.GET, urls.namespaceValidations(namespace), {}, {});
 };
 
-export const updateNamespace = (namespace: string, jsonPatch: string): Promise<Response<string>> => {
-  return newRequest(HTTP_VERBS.PATCH, urls.namespace(namespace), {}, jsonPatch);
+export const updateNamespace = (namespace: string, jsonPatch: string, cluster?: string): Promise<Response<string>> => {
+  return newRequest(HTTP_VERBS.PATCH, urls.namespace(namespace), { cluster: cluster }, jsonPatch);
 };
 
 export const getIstioConfig = (
@@ -193,7 +193,8 @@ export const getAllIstioConfigs = (
   objects: string[],
   validate: boolean,
   labelSelector: string,
-  workloadSelector: string
+  workloadSelector: string,
+  cluster?: string
 ): Promise<Response<IstioConfigsMap>> => {
   const params: any = namespaces && namespaces.length > 0 ? { namespaces: namespaces.join(',') } : {};
   if (objects && objects.length > 0) {
@@ -208,20 +209,29 @@ export const getAllIstioConfigs = (
   if (workloadSelector) {
     params.workloadSelector = workloadSelector;
   }
+  if (cluster) {
+    params.cluster = cluster;
+  }
   return newRequest<IstioConfigsMap>(HTTP_VERBS.GET, urls.allIstioConfigs(), params, {});
 };
 
-export const getIstioConfigDetail = (namespace: string, objectType: string, object: string, validate: boolean) => {
+export const getIstioConfigDetail = (
+  cluster: string,
+  namespace: string,
+  objectType: string,
+  object: string,
+  validate: boolean
+) => {
   return newRequest<IstioConfigDetails>(
     HTTP_VERBS.GET,
     urls.istioConfigDetail(namespace, objectType, object),
-    validate ? { validate: true, help: true } : {},
+    validate ? { validate: true, help: true, cluster: cluster } : { cluster: cluster },
     {}
   );
 };
 
 export const deleteIstioConfigDetail = (namespace: string, objectType: string, object: string) => {
-  return newRequest<string>(HTTP_VERBS.DELETE, urls.istioConfigDetail(namespace, objectType, object), {}, {});
+  return newRequest<string>(HTTP_VERBS.DELETE, urls.istioConfigDelete(namespace, objectType, object), {}, {});
 };
 
 export const updateIstioConfigDetail = (
@@ -230,7 +240,7 @@ export const updateIstioConfigDetail = (
   object: string,
   jsonPatch: string
 ): Promise<Response<string>> => {
-  return newRequest(HTTP_VERBS.PATCH, urls.istioConfigDetail(namespace, objectType, object), {}, jsonPatch);
+  return newRequest(HTTP_VERBS.PATCH, urls.istioConfigUpdate(namespace, objectType, object), {}, jsonPatch);
 };
 
 export const createIstioConfigDetail = (
@@ -254,12 +264,30 @@ export const getServices = (namespace: string, params: { [key: string]: string }
   return newRequest<ServiceList>(HTTP_VERBS.GET, urls.services(namespace), params, {});
 };
 
-export const getServiceMetrics = (namespace: string, service: string, params: IstioMetricsOptions) => {
-  return newRequest<IstioMetricsMap>(HTTP_VERBS.GET, urls.serviceMetrics(namespace, service), params, {});
+export const getServiceMetrics = (
+  namespace: string,
+  service: string,
+  params: IstioMetricsOptions,
+  cluster?: string
+) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<IstioMetricsMap>(HTTP_VERBS.GET, urls.serviceMetrics(namespace, service), queryParams, {});
 };
 
-export const getServiceDashboard = (namespace: string, service: string, params: IstioMetricsOptions) => {
-  return newRequest<DashboardModel>(HTTP_VERBS.GET, urls.serviceDashboard(namespace, service), params, {});
+export const getServiceDashboard = (
+  namespace: string,
+  service: string,
+  params: IstioMetricsOptions,
+  cluster?: string
+) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<DashboardModel>(HTTP_VERBS.GET, urls.serviceDashboard(namespace, service), queryParams, {});
 };
 
 export const getAggregateMetrics = (
@@ -276,8 +304,8 @@ export const getAggregateMetrics = (
   );
 };
 
-export const getApp = (namespace: string, app: string, params?: { [key: string]: string }) => {
-  return newRequest<App>(HTTP_VERBS.GET, urls.app(namespace, app), params, {});
+export const getApp = (cluster: string, namespace: string, app: string, params?: { [key: string]: string }) => {
+  return newRequest<App>(HTTP_VERBS.GET, urls.app(cluster, namespace, app), params, {});
 };
 
 export const getApps = (namespace: string, params: any = {}) => {
@@ -293,21 +321,29 @@ export const getAppDashboard = (namespace: string, app: string, params: IstioMet
 };
 
 export const getWorkloadMetrics = (
-  cluster: string,
   namespace: string,
   workload: string,
-  params: IstioMetricsOptions
+  params: IstioMetricsOptions,
+  cluster?: string
 ) => {
-  return newRequest<IstioMetricsMap>(HTTP_VERBS.GET, urls.workloadMetrics(cluster, namespace, workload), params, {});
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<IstioMetricsMap>(HTTP_VERBS.GET, urls.workloadMetrics(namespace, workload), queryParams, {});
 };
 
 export const getWorkloadDashboard = (
-  cluster: string,
   namespace: string,
   workload: string,
-  params: IstioMetricsOptions
+  params: IstioMetricsOptions,
+  cluster?: string
 ) => {
-  return newRequest<DashboardModel>(HTTP_VERBS.GET, urls.workloadDashboard(cluster, namespace, workload), params, {});
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<DashboardModel>(HTTP_VERBS.GET, urls.workloadDashboard(namespace, workload), queryParams, {});
 };
 
 export const getCustomDashboard = (ns: string, tpl: string, params: DashboardQuery) => {
@@ -316,6 +352,7 @@ export const getCustomDashboard = (ns: string, tpl: string, params: DashboardQue
 
 export const getNamespaceAppHealth = (
   namespace: string,
+  cluster: string,
   duration: DurationInSeconds,
   queryTime?: TimeInSeconds
 ): Promise<NamespaceAppHealth> => {
@@ -328,10 +365,17 @@ export const getNamespaceAppHealth = (
   if (queryTime) {
     params.queryTime = String(queryTime);
   }
+  if (cluster) {
+    params.cluster = cluster;
+  }
   return newRequest<NamespaceAppHealth>(HTTP_VERBS.GET, urls.namespaceHealth(namespace), params, {}).then(response => {
     const ret: NamespaceAppHealth = {};
     Object.keys(response.data).forEach(k => {
-      ret[k] = AppHealth.fromJson(namespace, k, response.data[k], { rateInterval: duration, hasSidecar: true });
+      ret[k] = AppHealth.fromJson(namespace, k, response.data[k], {
+        rateInterval: duration,
+        hasSidecar: true,
+        hasAmbient: false
+      });
     });
     return ret;
   });
@@ -339,6 +383,7 @@ export const getNamespaceAppHealth = (
 
 export const getNamespaceServiceHealth = (
   namespace: string,
+  cluster: string,
   duration: DurationInSeconds,
   queryTime?: TimeInSeconds
 ): Promise<NamespaceServiceHealth> => {
@@ -351,13 +396,17 @@ export const getNamespaceServiceHealth = (
   if (queryTime) {
     params.queryTime = String(queryTime);
   }
+  if (cluster) {
+    params.cluster = cluster;
+  }
   return newRequest<NamespaceServiceHealth>(HTTP_VERBS.GET, urls.namespaceHealth(namespace), params, {}).then(
     response => {
       const ret: NamespaceServiceHealth = {};
       Object.keys(response.data).forEach(k => {
         ret[k] = ServiceHealth.fromJson(namespace, k, response.data[k], {
           rateInterval: duration,
-          hasSidecar: true
+          hasSidecar: true,
+          hasAmbient: false
         });
       });
       return ret;
@@ -367,6 +416,7 @@ export const getNamespaceServiceHealth = (
 
 export const getNamespaceWorkloadHealth = (
   namespace: string,
+  cluster: string,
   duration: DurationInSeconds,
   queryTime?: TimeInSeconds
 ): Promise<NamespaceWorkloadHealth> => {
@@ -379,13 +429,17 @@ export const getNamespaceWorkloadHealth = (
   if (queryTime) {
     params.queryTime = String(queryTime);
   }
+  if (cluster) {
+    params.cluster = cluster;
+  }
   return newRequest<NamespaceWorkloadHealth>(HTTP_VERBS.GET, urls.namespaceHealth(namespace), params, {}).then(
     response => {
       const ret: NamespaceWorkloadHealth = {};
       Object.keys(response.data).forEach(k => {
         ret[k] = WorkloadHealth.fromJson(namespace, k, response.data[k], {
           rateInterval: duration,
-          hasSidecar: true
+          hasSidecar: true,
+          hasAmbient: false
         });
       });
       return ret;
@@ -401,16 +455,28 @@ export const getJaegerInfo = () => {
   return newRequest<JaegerInfo>(HTTP_VERBS.GET, urls.jaeger, {}, {});
 };
 
-export const getAppTraces = (cluster: string, namespace: string, app: string, params: TracingQuery) => {
-  return newRequest<JaegerResponse>(HTTP_VERBS.GET, urls.appTraces(cluster, namespace, app), params, {});
+export const getAppTraces = (namespace: string, app: string, params: TracingQuery, cluster?: string) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<JaegerResponse>(HTTP_VERBS.GET, urls.appTraces(namespace, app), params, {});
 };
 
-export const getServiceTraces = (cluster: string, namespace: string, service: string, params: TracingQuery) => {
-  return newRequest<JaegerResponse>(HTTP_VERBS.GET, urls.serviceTraces(cluster, namespace, service), params, {});
+export const getServiceTraces = (namespace: string, service: string, params: TracingQuery, cluster?: string) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<JaegerResponse>(HTTP_VERBS.GET, urls.serviceTraces(namespace, service), queryParams, {});
 };
 
-export const getWorkloadTraces = (cluster: string, namespace: string, workload: string, params: TracingQuery) => {
-  return newRequest<JaegerResponse>(HTTP_VERBS.GET, urls.workloadTraces(cluster, namespace, workload), params, {});
+export const getWorkloadTraces = (namespace: string, workload: string, params: TracingQuery, cluster?: string) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<JaegerResponse>(HTTP_VERBS.GET, urls.workloadTraces(namespace, workload), params, {});
 };
 
 export const getJaegerErrorTraces = (namespace: string, service: string, duration: DurationInSeconds) => {
@@ -462,7 +528,9 @@ export const getNodeGraphElements = (node: NodeParamsType, params: any) => {
         {}
       );
     case NodeType.WORKLOAD:
-      // @TODO add cluster
+      if (node.cluster) {
+        params['cluster'] = node.cluster;
+      }
       return newRequest<GraphDefinition>(
         HTTP_VERBS.GET,
         urls.workloadGraphElements(node.namespace.name, node.workload),
@@ -483,6 +551,7 @@ export const getServiceDetail = (
   namespace: string,
   service: string,
   validate: boolean,
+  cluster?: string,
   rateInterval?: DurationInSeconds
 ): Promise<ServiceDetailsInfo> => {
   const params: any = {};
@@ -492,13 +561,17 @@ export const getServiceDetail = (
   if (rateInterval) {
     params.rateInterval = `${rateInterval}s`;
   }
+  if (cluster) {
+    params.cluster = cluster;
+  }
   return newRequest<ServiceDetailsInfo>(HTTP_VERBS.GET, urls.service(namespace, service), params, {}).then(r => {
     const info: ServiceDetailsInfo = r.data;
     if (info.health) {
       // Default rate interval in backend = 600s
       info.health = ServiceHealth.fromJson(namespace, service, info.health, {
         rateInterval: rateInterval || 600,
-        hasSidecar: info.istioSidecar
+        hasSidecar: info.istioSidecar,
+        hasAmbient: info.istioAmbient
       });
     }
     return info;
@@ -509,8 +582,12 @@ export const getWorkloads = (namespace: string, params: { [key: string]: string 
   return newRequest<WorkloadNamespaceResponse>(HTTP_VERBS.GET, urls.workloads(namespace), params, {});
 };
 
-export const getWorkload = (cluster: string, namespace: string, name: string, params?: { [key: string]: string }) => {
-  return newRequest<Workload>(HTTP_VERBS.GET, urls.workload(cluster, namespace, name), params, {});
+export const getWorkload = (namespace: string, name: string, params?: { [key: string]: string }, cluster?: string) => {
+  const queryParams = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<Workload>(HTTP_VERBS.GET, urls.workload(namespace, name), queryParams, {});
 };
 
 export const updateWorkload = (
@@ -518,26 +595,33 @@ export const updateWorkload = (
   name: string,
   type: string,
   jsonPatch: string,
-  patchType?: string
+  patchType?: string,
+  cluster?: string
 ): Promise<Response<string>> => {
   const params: any = {};
   params.type = type;
   if (patchType) {
     params.patchType = patchType;
   }
-  // @TODO cluster name
-  return newRequest(HTTP_VERBS.PATCH, urls.workload(HomeClusterName, namespace, name), params, jsonPatch);
+  if (cluster) {
+    params.cluster = cluster;
+  }
+  return newRequest(HTTP_VERBS.PATCH, urls.workload(namespace, name), params, jsonPatch);
 };
 
 export const updateService = (
   namespace: string,
   name: string,
   jsonPatch: string,
-  patchType?: string
+  patchType?: string,
+  cluster?: string
 ): Promise<Response<string>> => {
   const params: any = {};
   if (patchType) {
     params.patchType = patchType;
+  }
+  if (cluster) {
+    params.cluster = cluster;
   }
   return newRequest(HTTP_VERBS.PATCH, urls.service(namespace, name), params, jsonPatch);
 };
@@ -553,7 +637,8 @@ export const getPodLogs = (
   maxLines?: number,
   sinceTime?: number,
   duration?: DurationInSeconds,
-  isProxy?: boolean
+  isProxy?: boolean,
+  cluster?: string
 ) => {
   const params: any = {};
   if (container) {
@@ -568,27 +653,42 @@ export const getPodLogs = (
   if (duration && duration > 0) {
     params.duration = `${duration}s`;
   }
+  if (cluster) {
+    params.cluster = cluster;
+  }
   params.isProxy = !!isProxy;
 
   return newRequest<PodLogs>(HTTP_VERBS.GET, urls.podLogs(namespace, name), params, {});
 };
 
-export const setPodEnvoyProxyLogLevel = (namespace: string, name: string, level: string) => {
-  const params: any = {};
-  params.level = level;
+export const setPodEnvoyProxyLogLevel = (namespace: string, name: string, level: string, cluster?: string) => {
+  const params: any = {
+    level: level
+  };
+  if (cluster) {
+    params.cluster = cluster;
+  }
 
   return newRequest<undefined>(HTTP_VERBS.POST, urls.podEnvoyProxyLogging(namespace, name), params, {});
 };
 
-export const getPodEnvoyProxy = (namespace: string, pod: string) => {
-  return newRequest<EnvoyProxyDump>(HTTP_VERBS.GET, urls.podEnvoyProxy(namespace, pod), {}, {});
+export const getPodEnvoyProxy = (namespace: string, pod: string, cluster?: string) => {
+  const params: any = {};
+  if (cluster) {
+    params.cluster = cluster;
+  }
+  return newRequest<EnvoyProxyDump>(HTTP_VERBS.GET, urls.podEnvoyProxy(namespace, pod), params, {});
 };
 
-export const getPodEnvoyProxyResourceEntries = (namespace: string, pod: string, resource: string) => {
+export const getPodEnvoyProxyResourceEntries = (namespace: string, pod: string, resource: string, cluster?: string) => {
+  const params: any = {};
+  if (cluster) {
+    params.cluster = cluster;
+  }
   return newRequest<EnvoyProxyDump>(
     HTTP_VERBS.GET,
     urls.podEnvoyProxyResourceEntries(namespace, pod, resource),
-    {},
+    params,
     {}
   );
 };
@@ -618,24 +718,45 @@ export const getErrorDetail = (error: AxiosError): string => {
   return '';
 };
 
-export const getAppSpans = (cluster: string, namespace: string, app: string, params: TracingQuery) => {
-  return newRequest<Span[]>(HTTP_VERBS.GET, urls.appSpans(cluster, namespace, app), params, {});
+export const getAppSpans = (namespace: string, app: string, params: TracingQuery, cluster?: string) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<Span[]>(HTTP_VERBS.GET, urls.appSpans(namespace, app), params, {});
 };
 
-export const getServiceSpans = (cluster: string, namespace: string, service: string, params: TracingQuery) => {
-  return newRequest<Span[]>(HTTP_VERBS.GET, urls.serviceSpans(cluster, namespace, service), params, {});
+export const getServiceSpans = (namespace: string, service: string, params: TracingQuery, cluster?: string) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<Span[]>(HTTP_VERBS.GET, urls.serviceSpans(namespace, service), queryParams, {});
 };
 
-export const getWorkloadSpans = (cluster: string, namespace: string, workload: string, params: TracingQuery) => {
-  return newRequest<Span[]>(HTTP_VERBS.GET, urls.workloadSpans(cluster, namespace, workload), params, {});
+export const getWorkloadSpans = (namespace: string, workload: string, params: TracingQuery, cluster?: string) => {
+  const queryParams: any = { ...params };
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<Span[]>(HTTP_VERBS.GET, urls.workloadSpans(namespace, workload), params, {});
 };
 
-export const getIstioPermissions = (namespaces: string[]) => {
-  return newRequest<IstioPermissions>(HTTP_VERBS.GET, urls.istioPermissions, { namespaces: namespaces.join(',') }, {});
+export const getIstioPermissions = (namespaces: string[], cluster?: string) => {
+  const queryParams: any = {};
+  queryParams.namespaces = namespaces.join(',');
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<IstioPermissions>(HTTP_VERBS.GET, urls.istioPermissions, queryParams, {});
 };
 
-export const getMetricsStats = (queries: MetricsStatsQuery[]) => {
-  return newRequest<MetricsStatsResult>(HTTP_VERBS.POST, urls.metricsStats, {}, { queries: queries });
+export const getMetricsStats = (queries: MetricsStatsQuery[], cluster?: string) => {
+  const queryParams: any = {};
+  if (cluster) {
+    queryParams.cluster = cluster;
+  }
+  return newRequest<MetricsStatsResult>(HTTP_VERBS.POST, urls.metricsStats, queryParams, { queries: queries });
 };
 
 export const getClusters = () => {

@@ -71,8 +71,10 @@ func (fn FeatureName) IsValid() error {
 }
 
 // Global configuration for the application.
-var configuration Config
-var rwMutex sync.RWMutex
+var (
+	configuration Config
+	rwMutex       sync.RWMutex
+)
 
 // Defines where the files are located that contain the secrets content
 var overrideSecretsDir = "/kiali-override-secrets"
@@ -295,6 +297,9 @@ type KubernetesConfig struct {
 	// Kiali cache list of namespaces per user, this is typically short lived cache compared with the duration of the
 	// namespace cache defined by previous CacheDuration parameter
 	CacheTokenNamespaceDuration int `yaml:"cache_token_namespace_duration,omitempty"`
+	// ClusterName is the name of the kubernetes cluster that Kiali is running in.
+	// If empty, then it will default to 'Kubernetes'.
+	ClusterName string `yaml:"cluster_name,omitempty"`
 	// List of controllers that won't be used for Workload calculation
 	// Kiali queries Deployment,ReplicaSet,ReplicationController,DeploymentConfig,StatefulSet,Job and CronJob controllers
 	// Deployment and ReplicaSet will be always queried, but ReplicationController,DeploymentConfig,StatefulSet,Job and CronJobs
@@ -356,6 +361,7 @@ type OpenIdConfig struct {
 // DeploymentConfig provides details on how Kiali was deployed.
 type DeploymentConfig struct {
 	AccessibleNamespaces []string `yaml:"accessible_namespaces"`
+	ClusterWideAccess    bool     `yaml:"cluster_wide_access,omitempty"`
 	InstanceName         string   `yaml:"instance_name"`
 	Namespace            string   `yaml:"namespace,omitempty"` // Kiali deployment namespace
 	ViewOnlyMode         bool     `yaml:"view_only_mode,omitempty"`
@@ -535,6 +541,7 @@ func NewConfig() (c *Config) {
 		CustomDashboards: dashboards.GetBuiltInMonitoringDashboards(),
 		Deployment: DeploymentConfig{
 			AccessibleNamespaces: []string{"**"},
+			ClusterWideAccess:    true,
 			InstanceName:         "kiali",
 			Namespace:            "istio-system",
 			ViewOnlyMode:         false,
@@ -710,6 +717,7 @@ func NewConfig() (c *Config) {
 			CacheIstioTypes:             []string{"AuthorizationPolicy", "DestinationRule", "EnvoyFilter", "Gateway", "PeerAuthentication", "RequestAuthentication", "ServiceEntry", "Sidecar", "VirtualService", "WorkloadEntry", "WorkloadGroup", "WasmPlugin", "Telemetry", "K8sGateway", "K8sHTTPRoute"},
 			CacheNamespaces:             []string{".*"},
 			CacheTokenNamespaceDuration: 10,
+			ClusterName:                 "",
 			ExcludeWorkloads:            []string{"CronJob", "DeploymentConfig", "Job", "ReplicationController"},
 			QPS:                         175,
 		},
@@ -785,14 +793,18 @@ func (conf *Config) AddHealthDefault() {
 
 // AllNamespacesAccessible determines if kiali has access to all namespaces.
 // When using the operator, the operator will grant the kiali service account
-// cluster role permissions when '**' is provided as a namespace.
+// cluster role permissions when '**' is provided in the accessible_namespaces
+// or if cluster-wide-access was explicitly requested.
 func (conf *Config) AllNamespacesAccessible() bool {
+	// look for ** in accessible namespaces first, as we have done in the past. This backwards compatible
+	// behavior will help support users who installed the server via the server helm chart.
 	for _, ns := range conf.Deployment.AccessibleNamespaces {
 		if ns == "**" {
 			return true
 		}
 	}
-	return false
+	// it is still possible we are in cluster wide access mode even if accessible namespaces has been restricted
+	return conf.Deployment.ClusterWideAccess
 }
 
 // Get the global Config

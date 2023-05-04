@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/kiali/kiali/business"
 	"github.com/kiali/kiali/config"
+	"github.com/kiali/kiali/log"
 	"github.com/kiali/kiali/models"
 )
 
@@ -38,9 +40,8 @@ func (p *workloadParams) extract(r *http.Request) {
 	p.Namespace = vars["namespace"]
 	p.WorkloadName = vars["workload"]
 	p.WorkloadType = query.Get("type")
-	if query.Has("cluster") && query.Get("cluster") != "null" {
-		p.Cluster = query.Get("cluster")
-	}
+	p.Cluster = clusterNameFromQuery(query)
+
 	var err error
 	p.IncludeHealth, err = strconv.ParseBool(query.Get("health"))
 	if err != nil {
@@ -61,7 +62,6 @@ func WorkloadList(w http.ResponseWriter, r *http.Request) {
 
 	// Get business layer
 	businessLayer, err := getBusiness(r)
-
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Workloads initialization error: "+err.Error())
 		return
@@ -105,7 +105,7 @@ func WorkloadDetails(w http.ResponseWriter, r *http.Request) {
 		includeValidations = true
 	}
 
-	var istioConfigValidations = models.IstioValidations{}
+	istioConfigValidations := models.IstioValidations{}
 	var errValidations error
 
 	wg := sync.WaitGroup{}
@@ -113,7 +113,7 @@ func WorkloadDetails(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), criteria.Namespace, "", criteria.WorkloadName)
+			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), criteria.Cluster, criteria.Namespace, "", criteria.WorkloadName)
 		}()
 	}
 
@@ -126,7 +126,7 @@ func WorkloadDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if criteria.IncludeHealth && err == nil {
-		workloadDetails.Health, err = business.Health.GetWorkloadHealth(r.Context(), criteria.Namespace, criteria.WorkloadName, criteria.RateInterval, criteria.QueryTime, workloadDetails)
+		workloadDetails.Health, err = business.Health.GetWorkloadHealth(r.Context(), criteria.Namespace, criteria.Cluster, criteria.WorkloadName, criteria.RateInterval, criteria.QueryTime, workloadDetails)
 		if err != nil {
 			handleErrorResponse(w, err)
 		}
@@ -160,6 +160,8 @@ func WorkloadUpdate(w http.ResponseWriter, r *http.Request) {
 	namespace := params["namespace"]
 	workload := params["workload"]
 	workloadType := query.Get("type")
+	cluster := clusterNameFromQuery(query)
+	log.Debugf("Cluster: %s", cluster)
 
 	includeValidations := false
 	if _, found := query["validate"]; found {
@@ -172,7 +174,7 @@ func WorkloadUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	jsonPatch := string(body)
 
-	var istioConfigValidations = models.IstioValidations{}
+	istioConfigValidations := models.IstioValidations{}
 	var errValidations error
 
 	wg := sync.WaitGroup{}
@@ -180,11 +182,11 @@ func WorkloadUpdate(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), namespace, "", workload)
+			istioConfigValidations, errValidations = business.Validations.GetValidations(r.Context(), cluster, namespace, "", workload)
 		}()
 	}
 
-	workloadDetails, err := business.Workload.UpdateWorkload(r.Context(), namespace, workload, workloadType, true, jsonPatch, patchType)
+	workloadDetails, err := business.Workload.UpdateWorkload(r.Context(), cluster, namespace, workload, workloadType, true, jsonPatch, patchType)
 	if includeValidations && err == nil {
 		wg.Wait()
 		workloadDetails.Validations = istioConfigValidations
@@ -194,13 +196,15 @@ func WorkloadUpdate(w http.ResponseWriter, r *http.Request) {
 		handleErrorResponse(w, err)
 		return
 	}
-	audit(r, "UPDATE on Namespace: "+namespace+" Workload name: "+workload+" Type: "+workloadType+" Patch: "+jsonPatch)
+	auditMsg := fmt.Sprintf("UPDATE on Cluster: [%s] Namespace: [%s] Workload name: [%s] Type: [%s] Patch: [%s]", cluster, namespace, workload, workloadType, jsonPatch)
+	audit(r, auditMsg)
 	RespondWithJSON(w, http.StatusOK, workloadDetails)
 }
 
 // PodDetails is the API handler to fetch all details to be displayed, related to a single pod
 func PodDetails(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
+	query := r.URL.Query()
 
 	// Get business layer
 	business, err := getBusiness(r)
@@ -208,11 +212,12 @@ func PodDetails(w http.ResponseWriter, r *http.Request) {
 		RespondWithError(w, http.StatusInternalServerError, "Pods initialization error: "+err.Error())
 		return
 	}
+	cluster := clusterNameFromQuery(query)
 	namespace := vars["namespace"]
 	pod := vars["pod"]
 
 	// Fetch and build pod
-	podDetails, err := business.Workload.GetPod(namespace, pod)
+	podDetails, err := business.Workload.GetPod(cluster, namespace, pod)
 	if err != nil {
 		handleErrorResponse(w, err)
 		return
@@ -236,6 +241,7 @@ func PodLogs(w http.ResponseWriter, r *http.Request) {
 		RespondWithError(w, http.StatusInternalServerError, "Pod Logs initialization error: "+err.Error())
 		return
 	}
+	cluster := clusterNameFromQuery(queryParams)
 	namespace := vars["namespace"]
 	pod := vars["pod"]
 
@@ -246,14 +252,13 @@ func PodLogs(w http.ResponseWriter, r *http.Request) {
 		queryParams.Get("isProxy"),
 		queryParams.Get("sinceTime"),
 		queryParams.Get("maxLines"))
-
 	if err != nil {
 		handleErrorResponse(w, err)
 		return
 	}
 
 	// Fetch pod logs
-	err = business.Workload.StreamPodLogs(namespace, pod, opts, w)
+	err = business.Workload.StreamPodLogs(cluster, namespace, pod, opts, w)
 	if err != nil {
 		handleErrorResponse(w, err)
 		return
